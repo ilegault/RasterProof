@@ -17,7 +17,7 @@ from defaults import DEFAULTS
 from patterns import get_pattern
 from dose import compute_dose
 from metrics import compute_all_metrics, _aperture_mask_from_edges
-from viz import plot_heatmap, animate_trajectory, plot_dwell_hist
+from viz import plot_heatmap, plot_dose_3d, plot_velocity_profile, animate_trajectory, plot_dwell_hist
 from optimizer import run_optimizer, grid_search
 
 st.set_page_config(page_title="Raster Scan Tool", layout="wide")
@@ -128,9 +128,9 @@ aperture_rect = (params["aperture_xL_mm"], params["aperture_xR_mm"],
                  params["aperture_yB_mm"], params["aperture_yT_mm"])
 
 # ─── Tabs ─────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs(["Dose Map", "Trajectory", "Metrics", "Optimizer"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Dose Map", "Dose 3D", "Trajectory & Velocity", "Metrics", "Optimizer"])
 
-# ── Tab 1: Dose Map ──────────────────────────────────────────────────────────
+# ── Tab 1: Dose Map (2D heatmap) ─────────────────────────────────────────────
 with tab1:
     fig = plot_heatmap(dose, xe, ye, aperture_rect, metrics)
     st.pyplot(fig)
@@ -157,34 +157,71 @@ with tab1:
         else:
             st.warning(f"FWHM < 3× spot spacing ({metrics['spot_spacing_mm']:.3f} mm) — striping likely")
 
-# ── Tab 2: Trajectory ────────────────────────────────────────────────────────
+# ── Tab 2: Dose 3D Surface ────────────────────────────────────────────────────
 with tab2:
-    st.subheader("Trajectory Preview (first 2000 points)")
-    n_preview = min(2000, len(x_arr))
-    fig2, ax2 = plt.subplots(figsize=(6, 6))
-    sc = ax2.scatter(x_arr[:n_preview], y_arr[:n_preview],
-                     c=t_arr[:n_preview] * 1000, cmap="plasma", s=1, alpha=0.7)
-    import matplotlib.patches as mpatches
-    rect_patch = mpatches.Rectangle(
-        (params["aperture_xL_mm"], params["aperture_yB_mm"]),
-        params["aperture_xR_mm"] - params["aperture_xL_mm"],
-        params["aperture_yT_mm"] - params["aperture_yB_mm"],
-        linewidth=2, edgecolor="white", facecolor="none", linestyle="--",
+    st.subheader("3D Dose Surface")
+    st.caption(
+        "Inspired by Yan et al. (2005) Figs. 2 & 4 — the 3D view reveals cusping, "
+        "edge hot-spots, and non-uniformity that the flat heatmap can obscure."
     )
-    ax2.add_patch(rect_patch)
-    fig2.colorbar(sc, ax=ax2, label="Time (ms)")
-    ax2.set_xlabel("X (mm)")
-    ax2.set_ylabel("Y (mm)")
-    ax2.set_title(f"Pattern: {pattern}")
-    ax2.set_facecolor("#111")
-    fig2.patch.set_facecolor("#111")
-    ax2.tick_params(colors="white")
-    ax2.xaxis.label.set_color("white")
-    ax2.yaxis.label.set_color("white")
-    ax2.title.set_color("white")
-    st.pyplot(fig2)
-    plt.close(fig2)
+    fig_3d = plot_dose_3d(dose, xe, ye, aperture_rect, metrics)
+    st.pyplot(fig_3d)
+    plt.close(fig_3d)
 
+    st.info(
+        "**Reading this plot:** A flat plateau = uniform dose (good). "
+        "Tall spikes at the X-edges = sinusoidal cusping (the beam slows at turnarounds). "
+        "A ridge along one axis = Y-ramp non-uniformity."
+    )
+
+# ── Tab 3: Trajectory & Velocity ─────────────────────────────────────────────
+with tab3:
+    col_traj, col_vel = st.columns([1, 1])
+
+    with col_traj:
+        st.subheader("Trajectory Preview (first 2000 points)")
+        n_preview = min(2000, len(x_arr))
+        fig2, ax2 = plt.subplots(figsize=(5, 5))
+        sc = ax2.scatter(x_arr[:n_preview], y_arr[:n_preview],
+                         c=t_arr[:n_preview] * 1000, cmap="plasma", s=1, alpha=0.7)
+        import matplotlib.patches as mpatches
+        rect_patch = mpatches.Rectangle(
+            (params["aperture_xL_mm"], params["aperture_yB_mm"]),
+            params["aperture_xR_mm"] - params["aperture_xL_mm"],
+            params["aperture_yT_mm"] - params["aperture_yB_mm"],
+            linewidth=2, edgecolor="white", facecolor="none", linestyle="--",
+        )
+        ax2.add_patch(rect_patch)
+        fig2.colorbar(sc, ax=ax2, label="Time (ms)")
+        ax2.set_xlabel("X (mm)")
+        ax2.set_ylabel("Y (mm)")
+        ax2.set_title(f"Pattern: {pattern}")
+        ax2.set_facecolor("#111")
+        fig2.patch.set_facecolor("#111")
+        ax2.tick_params(colors="white")
+        ax2.xaxis.label.set_color("white")
+        ax2.yaxis.label.set_color("white")
+        ax2.title.set_color("white")
+        st.pyplot(fig2)
+        plt.close(fig2)
+
+    with col_vel:
+        st.subheader("Probe Velocity Profile")
+        st.caption("After Teo et al. (2018) Fig. 7 — shows why sinusoidal scans deposit more dose at edges.")
+
+    # Full-width velocity plot below
+    fig_vel = plot_velocity_profile(params, t_arr, x_arr, y_arr)
+    st.pyplot(fig_vel)
+    plt.close(fig_vel)
+
+    # Dwell histogram
+    st.subheader("Dwell-Time Distribution")
+    mask = _aperture_mask_from_edges(xe, ye, *aperture_rect)
+    fig3 = plot_dwell_hist(rho, mask)
+    st.pyplot(fig3)
+    plt.close(fig3)
+
+    st.divider()
     if st.button("Generate & Download GIF"):
         with st.spinner("Rendering animation..."):
             import tempfile
@@ -196,8 +233,8 @@ with tab2:
             os.unlink(gif_path)
         st.download_button("Download GIF", gif_bytes, file_name="trajectory.gif", mime="image/gif")
 
-# ── Tab 3: Metrics ───────────────────────────────────────────────────────────
-with tab3:
+# ── Tab 4: Metrics ───────────────────────────────────────────────────────────
+with tab4:
     st.subheader("All Metrics")
     import pandas as pd
     metric_display = {
@@ -225,13 +262,8 @@ with tab3:
         f"Both should be small relative to the damage cascade spacing."
     )
 
-    mask = _aperture_mask_from_edges(xe, ye, *aperture_rect)
-    fig3 = plot_dwell_hist(rho, mask)
-    st.pyplot(fig3)
-    plt.close(fig3)
-
-# ── Tab 4: Optimizer ─────────────────────────────────────────────────────────
-with tab4:
+# ── Tab 5: Optimizer ─────────────────────────────────────────────────────────
+with tab5:
     st.subheader("Grid Search — Objective Landscape")
     n_grid = st.slider("Grid resolution", 5, 20, 10, 1)
     if st.button("Run Grid Search"):

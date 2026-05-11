@@ -242,3 +242,9 @@ cython_debug/
 #.idea/
 
 .idea
+
+.claude
+
+bash.exe.stackdump
+
+
