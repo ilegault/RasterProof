@@ -94,11 +94,27 @@ with st.sidebar:
     grid_ny = st.slider("Grid Ny", 64, 512, DEFAULTS["grid_ny"], 64)
 
     st.header("Physics")
-    tau_recomb = st.slider("τ_recomb (ms)", 0.1, 10.0, DEFAULTS["tau_recomb_ms"], 0.1)
+    tau_recomb = st.slider(
+        "τ_recomb (ms)", 0.1, 10.0, DEFAULTS["tau_recomb_ms"], 0.1,
+        help=(
+            "Defect recombination time. Material-/temperature-dependent. "
+            "Pulsed-beam measurements report 0.2-10 ms for Si and 0.3-8 ms "
+            "for Ge over RT-160 C (Wallace et al., Sci. Rep. 7, 39754 & "
+            "13153, 2017). Default 1 ms is reasonable for RT Si/Ge."
+        ),
+    )
     D_i = st.select_slider("D_i (m²/s)", options=[1e-11, 1e-10, 1e-9, 1e-8, 1e-7],
                             value=DEFAULTS["D_interstitial_m2s"],
                             format_func=lambda v: f"{v:.0e}")
-    fdrt_thresh = st.slider("FDRT threshold (Hz)", 100, 1000, int(DEFAULTS["fdrt_threshold_hz"]), 10)
+    fdrt_thresh = st.slider(
+        "FDRT threshold (Hz)", 100, 1000, int(DEFAULTS["fdrt_threshold_hz"]), 10,
+        help=(
+            "Minimum slow-axis frequency for FDRT steady-state regime. "
+            "Empirical floor from Gigax et al. (2015), J. Nucl. Mater. 465, "
+            "343-348: raster freq > 500 Hz suppresses pulsing artifacts in Fe "
+            "at 450 C. Adjust per material/temperature."
+        ),
+    )
 
     st.header("Optimizer Weights")
     w1 = st.slider("w1 (flatness)", 0.0, 2.0, DEFAULTS["w1"], 0.1)
@@ -135,6 +151,7 @@ params = {
     "flatness_target_pct": DEFAULTS["flatness_target_pct"],
     "w1": w1, "w2": w2, "w3": w3, "w4": w4, "w5": w5,
     "w6": DEFAULTS.get("w6", 0.5),
+    "w7": DEFAULTS.get("w7", 2.0),
 }
 
 # ─── Cached pipeline ──────────────────────────────────────────────────────────
@@ -277,6 +294,7 @@ with tab4:
         "Steady state": str(metrics['steady_state']),
         "FWHM/spot rule pass": str(metrics['fwhm_spot_pass']),
         "Spot spacing (mm)": f"{metrics['spot_spacing_mm']:.4f}",
+        "Max pixel off-time (ms)": f"{metrics['max_pixel_off_time_ms']:.3f}",
     }
     df = pd.DataFrame(list(metric_display.items()), columns=["Metric", "Value"])
     st.dataframe(df, use_container_width=True, hide_index=True)
@@ -328,7 +346,8 @@ with tab5:
     st.caption("Optimizes [f_x, f_y, X-overscan, Y-overscan] jointly.")
     if st.button("Run Optimizer"):
         # fx upper bound 30 kHz (well past BW) so the optimizer can DISCOVER the BW tradeoff
-        bounds = [(500, 30000), (1, 500), (1.0, 1.5), (1.0, 1.5)]
+        fy_min = float(DEFAULTS.get("optimizer_fy_min_hz", 50.0))
+        bounds = [(500, 30000), (fy_min, 5000.0), (1.0, 1.5), (1.0, 1.5)]
         with st.spinner("Running differential evolution (this may take 1–5 minutes)..."):
             result = run_optimizer(bounds, params)
         fx_opt, fy_opt, ax_f_opt, ay_f_opt = result.x

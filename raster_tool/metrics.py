@@ -122,16 +122,37 @@ def steady_state_flag(
     tau_recomb_ms: float,
     fdrt_threshold_hz: float = 500.0,
 ) -> bool:
+    """True if beam operates in FDRT steady-state regime.
+
+    Uses the SLOWEST axis (min(fx, fy)) as the pixel-revisit rate. In a
+    classic raster the beam paints horizontal lines and each line is repainted
+    only once per Y cycle, so 1/fy is the off-time between visits to any
+    given pixel -- not 1/fx.
+
+    Conditions (BOTH must hold):
+        1) min(fx, fy) >= fdrt_threshold_hz         (above empirical Gigax-2015 floor)
+        2) 1000 / min(fx, fy) <= tau_recomb_ms      (off-time short vs defect relaxation)
+
+    See physics_refs.FDRT_REFS and physics_refs.PIXEL_REVISIT_RULE.
     """
-    True if beam operates in FDRT steady-state regime.
-    Axis-symmetric: uses the FASTER of fx/fy as the revisit frequency.
-    Condition: fast frequency >= FDRT threshold AND revisit period <= tau_recomb.
-    """
-    f_fast = max(fx_hz, fy_hz)
-    if f_fast < fdrt_threshold_hz:
+    f_slow = min(fx_hz, fy_hz)
+    if f_slow < fdrt_threshold_hz:
         return False
-    revisit_ms = 1000.0 / f_fast
+    revisit_ms = 1000.0 / f_slow
     return revisit_ms <= tau_recomb_ms
+
+
+def max_pixel_off_time_ms(fx_hz: float, fy_hz: float) -> float:
+    """Worst-case time (ms) between beam visits to any given pixel.
+
+    For classic raster patterns this is dominated by the slow axis:
+        off_time = 1 / min(fx, fy)
+    See physics_refs.PIXEL_REVISIT_RULE for the derivation.
+    """
+    f_slow = min(fx_hz, fy_hz)
+    if f_slow <= 0:
+        return float("inf")
+    return 1000.0 / f_slow
 
 
 def fwhm_spot_rule(fwhm_x_mm: float, fwhm_y_mm: float,
@@ -273,4 +294,5 @@ def compute_all_metrics(dose, rho, x_traj, y_traj, dt, x_edges, y_edges, params)
         "triangularity":       triangularity_score(x_traj, t_arr, params["fx_hz"]),
         "slew_margin_pct":     _slew_margin,
         "slew_limited":        _slew_margin < 0.0,
+        "max_pixel_off_time_ms": max_pixel_off_time_ms(params["fx_hz"], params["fy_hz"]),
     }

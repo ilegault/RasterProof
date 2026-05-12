@@ -75,7 +75,8 @@ class OptimizerWorker(QThread):
                 self.finished.emit(("grid", fx_vals, fy_vals, J_grid))
             else:
                 from optimizer import run_optimizer
-                bounds = [(500, 30000), (1, 500), (1.0, 1.5), (1.0, 1.5)]
+                fy_min = float(DEFAULTS.get("optimizer_fy_min_hz", 50.0))
+                bounds = [(500, 30000), (fy_min, 5000.0), (1.0, 1.5), (1.0, 1.5)]
                 result = run_optimizer(bounds, self.params)
                 self.finished.emit(("optimize", result))
         except Exception as e:
@@ -245,7 +246,15 @@ class ParamPanel(QScrollArea):
         # ── Physics ───────────────────────────────────────────────────────────
         f = group("Physics / FDRT")
         self.tau_recomb  = _dbl(0.01, 100.0,   DEFAULTS["tau_recomb_ms"],    0.1)
+        self.tau_recomb.setToolTip(
+            "Defect recombination time. Wallace et al. 2017 (Sci. Rep. 39754) "
+            "report 0.2-10 ms for Si over -20 to 140 C."
+        )
         self.fdrt_thresh = _dbl(10.0, 50000.0, DEFAULTS["fdrt_threshold_hz"], 50.0, decimals=0)
+        self.fdrt_thresh.setToolTip(
+            "FDRT floor. Gigax et al. 2015 (J. Nucl. Mater. 465, 343-348) "
+            "report ~500 Hz suppresses pulsing in Fe at 450 C."
+        )
         f.addRow("τ_recomb (ms)",       self.tau_recomb)
         f.addRow("FDRT threshold (Hz)", self.fdrt_thresh)
 
@@ -375,6 +384,7 @@ class MetricsTab(QWidget):
             ("Triangularity (0..1)",    f"{metrics['triangularity']:.4f}"),
             ("Slew margin (%)",         f"{metrics['slew_margin_pct']:+.2f}"),
             ("Slew limited",            str(metrics['slew_limited'])),
+            ("Max pixel off-time (ms)", f"{metrics['max_pixel_off_time_ms']:.4f}"),
         ]
         self.table.setRowCount(len(rows))
         for i, (k, v) in enumerate(rows):
@@ -458,7 +468,7 @@ class OptimizerTab(QWidget):
         # ── Result label ──────────────────────────────────────────────────────
         self.result_lbl = QLabel(
             "Run Grid Search for a fast landscape view.\n"
-            "Run Optimizer (DE) for the best f₁/f₂ within the grid bounds (500–10000 Hz, 1–500 Hz)."
+            "Run Optimizer (DE) for the best f₁/f₂ within the grid bounds (500–15000 Hz, 50–5000 Hz)."
         )
         self.result_lbl.setWordWrap(True)
         self.result_lbl.setStyleSheet("color: #ccd; padding: 4px;")

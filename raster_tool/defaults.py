@@ -55,4 +55,15 @@ DEFAULTS = {
 
     # --- Extra optimizer weight for triangularity (waveform-fidelity) ---
     "w6": 0.5,    # penalty on (1 - triangularity_score); 0 disables
+
+    # --- New optimizer weight (pixel revisit / FDRT off-time) ---
+    "w7":                         2.0,    # penalty for max_pixel_off_time > tau_recomb
+
+    # --- Auto-scaled T_total for the optimizer (per-trial; doesn't change user GUI) ---
+    "optimizer_min_slow_cycles":  5.0,    # require >= this many slow-axis cycles per trial
+    "optimizer_T_max_ms":         500.0,  # hard cap on T_total inside optimizer (don't blow up runtime)
+
+    # --- Hard lower bound on fy for the optimizer (Hz). 50 Hz = 20 ms frame period ---
+    # --- already much faster than typical tau_recomb in real samples. ---
+    "optimizer_fy_min_hz":        50.0,
 }

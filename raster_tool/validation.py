@@ -18,7 +18,7 @@ from patterns import get_realistic_trajectory, get_pattern, lissajous, classic_r
 from dose import compute_dose, trajectory_density, apply_aperture
 from metrics import (
     flatness_pct, steady_state_flag, compute_all_metrics, pinch_metric,
-    _aperture_mask_from_edges,
+    _aperture_mask_from_edges, max_pixel_off_time_ms,
 )
 
 
@@ -212,16 +212,17 @@ def test6():
 
 # --- Test 7: FDRT steady-state toggle -------------------------------------------
 def test7():
-    print("\nTest 7: FDRT steady-state flag toggles at threshold")
-    # fx=100 Hz < 500 Hz threshold -> TRANSIENT
-    ss_slow = steady_state_flag(100.0, 255.0, 1.0, 500.0)
-    # fx=1000 Hz >= 500 Hz, revisit_ms=1ms <= tau=1ms -> STEADY
-    ss_fast = steady_state_flag(1000.0, 255.0, 1.0, 500.0)
-    # fx=2061 Hz (MIBL default) -> STEADY
-    ss_mibl = steady_state_flag(2061.0, 255.0, 1.0, 500.0)
-    check("fx=100 Hz -> TRANSIENT (False)", ss_slow is False, f"got {ss_slow}")
-    check("fx=1000 Hz -> STEADY (True)", ss_fast is True, f"got {ss_fast}")
-    check("fx=2061 Hz (MIBL) -> STEADY (True)", ss_mibl is True, f"got {ss_mibl}")
+    print("\nTest 7: FDRT steady-state flag uses slow axis (min(fx, fy))")
+    # Both axes below FDRT floor -> TRANSIENT
+    ss_both_slow = steady_state_flag(100.0, 255.0, 1.0, 500.0)
+    # Fast axis above floor but slow axis (fy=255) still below floor -> TRANSIENT
+    ss_fast_x_only = steady_state_flag(2061.0, 255.0, 1.0, 500.0)
+    # Both axes >= 500 Hz and revisit_ms = 1000/1000 = 1 ms = tau -> STEADY
+    ss_both_fast = steady_state_flag(2000.0, 1000.0, 1.0, 500.0)
+    check("fx=100, fy=255 Hz -> TRANSIENT (False)", ss_both_slow is False, f"got {ss_both_slow}")
+    check("fx=2061, fy=255 Hz -> TRANSIENT (fy below FDRT floor)", ss_fast_x_only is False,
+          f"got {ss_fast_x_only}")
+    check("fx=2000, fy=1000 Hz -> STEADY (True)", ss_both_fast is True, f"got {ss_both_fast}")
 
 
 # --- Test 8: Dose conservation --------------------------------------------------
@@ -322,6 +323,42 @@ def test12():
           f"max x diff = {np.max(np.abs(x_legacy - x_new)):.2e}")
 
 
+# --- Test 13: FDRT penalty fires on slow fy --------------------------------
+def test13():
+    print("\nTest 13: Objective punishes fy=14 (the bug from the screenshot)")
+    from optimizer import objective
+    p = dict(DEFAULTS)
+    p["simulate_amplifier"] = True
+    # Reproduce the bad result from the user's screenshot
+    J_bad = objective([579.0, 14.0, 1.471, 1.448], p)
+    # And a sensible operating point
+    J_good = objective([2000.0, 600.0, 1.3, 1.3], p)
+    check("J(fx=579, fy=14) > J(fx=2000, fy=600)", J_bad > J_good,
+          f"J_bad={J_bad:.3f}, J_good={J_good:.3f}")
+
+
+# --- Test 14: steady_state_flag uses the slow axis -------------------------
+def test14():
+    print("\nTest 14: steady_state_flag uses min(fx, fy), not max")
+    from metrics import steady_state_flag
+    # max(fx, fy) = 5000 Hz (would pass under the old buggy logic)
+    # min(fx, fy) = 100 Hz (well below FDRT floor of 500)
+    ss = steady_state_flag(fx_hz=5000.0, fy_hz=100.0,
+                           tau_recomb_ms=1.0, fdrt_threshold_hz=500.0)
+    check("steady_state_flag rejects slow axis below FDRT floor", ss is False,
+          f"got steady_state={ss}")
+
+
+# --- Test 15: max_pixel_off_time_ms reports the slow-axis period ----------
+def test15():
+    print("\nTest 15: max_pixel_off_time_ms reports 1/min(fx,fy)")
+    from metrics import max_pixel_off_time_ms
+    off = max_pixel_off_time_ms(fx_hz=2000.0, fy_hz=50.0)
+    expected = 1000.0 / 50.0
+    check("max off-time matches 1/fy when fy<fx", abs(off - expected) < 1e-6,
+          f"off={off:.3f}, expected={expected:.3f}")
+
+
 # --- Main -----------------------------------------------------------------------
 if __name__ == "__main__":
     print("=" * 60)
@@ -340,6 +377,9 @@ if __name__ == "__main__":
     test10()
     test11()
     test12()
+    test13()
+    test14()
+    test15()
 
     n_pass = sum(results)
     n_total = len(results)
