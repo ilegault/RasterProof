@@ -141,9 +141,9 @@ def fwhm_spot_rule(fwhm_x_mm: float, fwhm_y_mm: float,
     Returns (pass_flag, worst_spot_spacing_mm).
     """
     results = []
-    for amp, fwhm in [(ax_mm, fwhm_x_mm), (ay_mm, fwhm_y_mm)]:
+    for f_axis, amp, fwhm in [(fx_hz, ax_mm, fwhm_x_mm), (fy_hz, ay_mm, fwhm_y_mm)]:
         try:
-            n_lines = int(fx_hz) // gcd(int(fx_hz), int(fy_hz))
+            n_lines = int(f_axis) // gcd(int(fx_hz), int(fy_hz))
         except ZeroDivisionError:
             results.append((True, 0.0))
             continue

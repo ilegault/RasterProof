@@ -50,10 +50,10 @@ with st.sidebar:
     ax_mm = half_x * ax_factor
     ay_mm = half_y * ay_factor
 
-    fx_hz = st.slider("f_x (Hz) — fast axis", 500, 10000,
+    fx_hz = st.slider("f₁ (Hz)", 1, 50000,
                       int(DEFAULTS["fx_hz"]), 10,
                       key="fx_slider")
-    fy_hz = st.slider("f_y (Hz) — slow axis", 1, 500,
+    fy_hz = st.slider("f₂ (Hz)", 1, 50000,
                       int(DEFAULTS["fy_hz"]), 1,
                       key="fy_slider")
 

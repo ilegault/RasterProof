@@ -36,7 +36,7 @@ def lissajous(fx, fy, ax, ay, phase_deg, T_s, n_samples):
     return t, x, y
 
 
-def spiral(f_radial, f_angular, r_max, T_s, n_samples):
+def spiral(f_angular, r_max, T_s, n_samples):
     """Outward spiral: radius grows linearly, angle spins at f_angular."""
     t = np.linspace(0, T_s, n_samples, endpoint=False)
     r = r_max * t / T_s
@@ -78,7 +78,7 @@ def get_pattern(name, params):
         return lissajous(fx, fy, ax, ay, params["lissajous_phase_deg"], T_s, n)
     elif name == "spiral":
         r_max = max(ax, ay)
-        return spiral(fx, fy, r_max, T_s, n)
+        return spiral(fy, r_max, T_s, n)
     elif name == "sinusoidal":
         return sinusoidal_raster(fx, fy, ax, ay, T_s, n)
     elif name == "wobble":

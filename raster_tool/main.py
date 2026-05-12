@@ -1,9 +1,10 @@
 """
-CLI entry point for the Raster Scan Analysis Tool.
+Entry point for the Raster Scan Analysis Tool.
 
 Usage:
-    python main.py --validate
-    python main.py --config config.yaml
+    python main.py              # launch PyQt5 GUI (default)
+    python main.py --validate   # run validation suite
+    python main.py --config config.yaml   # headless CLI pipeline
 """
 import sys
 import os
@@ -13,10 +14,12 @@ import argparse
 import json
 import csv
 
-import matplotlib
-matplotlib.use("Agg")   # headless backend for CLI — must be set before any pyplot import
-
 import numpy as np
+
+
+def run_gui():
+    from app import main as app_main
+    app_main()
 
 
 def run_validate():
@@ -24,6 +27,10 @@ def run_validate():
 
 
 def run_config(config_path):
+    import matplotlib
+    matplotlib.use("Agg")   # headless backend — set before any pyplot import
+    import matplotlib.pyplot as _plt  # noqa: F401 — triggers backend registration
+
     import yaml
     from defaults import DEFAULTS
     from patterns import get_pattern
@@ -77,11 +84,10 @@ def run_config(config_path):
 def main():
     parser = argparse.ArgumentParser(description="Raster Scan Analysis Tool")
     parser.add_argument("--validate", action="store_true", help="Run validation suite")
-    parser.add_argument("--config", type=str, help="YAML config file path")
+    parser.add_argument("--config", type=str, help="YAML config file path (headless CLI)")
     args = parser.parse_args()
 
     if args.validate:
-        # Run validation as subprocess so it has its own exit code
         import subprocess
         result = subprocess.run(
             [sys.executable, os.path.join(os.path.dirname(__file__), "validation.py")],
@@ -91,7 +97,7 @@ def main():
     elif args.config:
         run_config(args.config)
     else:
-        parser.print_help()
+        run_gui()
 
 
 if __name__ == "__main__":

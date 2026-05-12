@@ -2,7 +2,7 @@
 Raster Scan Analysis Tool — Native Desktop GUI
 Run: python app.py   (from inside the raster_tool/ directory)
 
-PyQt5 + embedded matplotlib figures. No browser, no server.
+PySide6 + embedded matplotlib figures. No browser, no server.
 """
 import sys
 import os
@@ -10,20 +10,20 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import numpy as np
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QSplitter,
     QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QPushButton, QDoubleSpinBox, QSpinBox,
     QComboBox, QTabWidget, QScrollArea,
     QTableWidget, QTableWidgetItem, QGroupBox,
-    QProgressBar, QSizePolicy, QMessageBox,
+    QProgressBar, QSizePolicy, QMessageBox, QAbstractItemView,
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont, QColor
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
+from PySide6.QtGui import QFont, QColor, QPalette
 
 import matplotlib
-matplotlib.use("Qt5Agg")
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
+matplotlib.use("QtAgg")
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
 from defaults import DEFAULTS
@@ -36,8 +36,8 @@ from viz import plot_heatmap, plot_dose_3d, plot_velocity_profile, plot_dwell_hi
 # ─── Worker threads ───────────────────────────────────────────────────────────
 
 class ComputeWorker(QThread):
-    finished = pyqtSignal(object)
-    error    = pyqtSignal(str)
+    finished = Signal(object)
+    error    = Signal(str)
 
     def __init__(self, params):
         super().__init__()
@@ -56,8 +56,8 @@ class ComputeWorker(QThread):
 
 
 class OptimizerWorker(QThread):
-    finished = pyqtSignal(object)
-    error    = pyqtSignal(str)
+    finished = Signal(object)
+    error    = Signal(str)
 
     def __init__(self, mode, params, n_grid=10):
         super().__init__()
@@ -99,7 +99,7 @@ class PlotTab(QWidget):
             if item.widget():
                 item.widget().deleteLater()
         self.canvas  = FigureCanvasQTAgg(fig)
-        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
         self._layout.addWidget(self.toolbar)
         self._layout.addWidget(self.canvas)
@@ -178,7 +178,7 @@ class ParamPanel(QScrollArea):
         # ── Frequencies ───────────────────────────────────────────────────────
         f = group("Frequencies (both axes free)")
         note = QLabel("No fast/slow restriction.\nEither axis can be higher.")
-        note.setStyleSheet("color: #888; font-size: 10px;")
+        note.setStyleSheet("color: #aab; font-size: 10px;")
         note.setWordWrap(True)
         f.addRow(note)
         self.fx = _dbl(0.5, 50000.0, DEFAULTS["fx_hz"], 10.0, decimals=1)
@@ -278,7 +278,7 @@ class MetricsTab(QWidget):
         self.status_ss   = QLabel("–")
         self.status_fwhm = QLabel("–")
         for lbl in (self.status_ss, self.status_fwhm):
-            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.setStyleSheet("padding: 6px; border-radius: 4px; font-weight: bold;")
             lbl.setMinimumHeight(36)
 
@@ -292,7 +292,7 @@ class MetricsTab(QWidget):
         self.table.setHorizontalHeaderLabels(["Metric", "Value"])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         layout.addWidget(self.table)
 
@@ -303,7 +303,7 @@ class MetricsTab(QWidget):
             "FDRT steady-state = beam revisit faster than recombination."
         )
         help_lbl.setWordWrap(True)
-        help_lbl.setStyleSheet("color: #666; font-size: 10px; padding: 4px;")
+        help_lbl.setStyleSheet("color: #aab; font-size: 10px; padding: 4px;")
         layout.addWidget(help_lbl)
 
     def update(self, metrics: dict):
@@ -357,7 +357,7 @@ class MetricsTab(QWidget):
 # ─── Optimizer tab ────────────────────────────────────────────────────────────
 
 class OptimizerTab(QWidget):
-    apply_requested = pyqtSignal(float, float)  # (fx_opt, fy_opt)
+    apply_requested = Signal(float, float)  # (fx_opt, fy_opt)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -406,7 +406,7 @@ class OptimizerTab(QWidget):
             "Run Optimizer (DE) for the best f₁/f₂ within the grid bounds (500–10000 Hz, 1–500 Hz)."
         )
         self.result_lbl.setWordWrap(True)
-        self.result_lbl.setStyleSheet("color: #444; padding: 4px;")
+        self.result_lbl.setStyleSheet("color: #ccd; padding: 4px;")
         layout.addWidget(self.result_lbl)
 
         # ── Apply button ──────────────────────────────────────────────────────
@@ -447,9 +447,9 @@ class OptimizerTab(QWidget):
         reply = QMessageBox.question(
             self, "Run Optimizer",
             "Differential evolution can take 1–5 minutes.\nProceed?",
-            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
         self._start_worker("optimize")
 
@@ -548,7 +548,7 @@ class MainWindow(QMainWindow):
         # ── Top bar ──────────────────────────────────────────────────────────
         top = QHBoxLayout()
         title = QLabel("Ion-Beam Raster Scan Analysis Tool")
-        title.setFont(QFont("", 14, QFont.Bold))
+        title.setFont(QFont("", 14, QFont.Weight.Bold))
 
         self.run_btn = QPushButton("▶  Run")
         self.run_btn.setFixedHeight(36)
@@ -566,7 +566,7 @@ class MainWindow(QMainWindow):
         self.progress.setVisible(False)
 
         self.status_lbl = QLabel("Ready")
-        self.status_lbl.setStyleSheet("color: #555; font-size: 11px;")
+        self.status_lbl.setStyleSheet("color: #ccd; font-size: 11px;")
 
         top.addWidget(title)
         top.addStretch()
@@ -576,7 +576,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.progress)
 
         # ── Splitter ─────────────────────────────────────────────────────────
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout.addWidget(splitter, stretch=1)
 
         self.params_panel = ParamPanel()
@@ -650,7 +650,7 @@ class MainWindow(QMainWindow):
             f"Done — flatness: <span style='color:{color};font-weight:bold'>"
             f"{flat:.1f}%</span>  pinch: {metrics['pinch_pct']:.1f}%"
         )
-        self.status_lbl.setTextFormat(Qt.RichText)
+        self.status_lbl.setTextFormat(Qt.TextFormat.RichText)
         self.run_btn.setEnabled(True)
         self.progress.setVisible(False)
         self._last_result = result
@@ -703,14 +703,25 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
 
-    from PyQt5.QtGui import QPalette
-    pal = app.palette()
-    pal.setColor(QPalette.Window, QColor(245, 245, 245))
+    pal = QPalette()
+    pal.setColor(QPalette.ColorRole.Window,          QColor(38,  38,  48))
+    pal.setColor(QPalette.ColorRole.WindowText,      QColor(220, 220, 230))
+    pal.setColor(QPalette.ColorRole.Base,            QColor(26,  26,  34))
+    pal.setColor(QPalette.ColorRole.AlternateBase,   QColor(46,  46,  58))
+    pal.setColor(QPalette.ColorRole.ToolTipBase,     QColor(38,  38,  48))
+    pal.setColor(QPalette.ColorRole.ToolTipText,     QColor(220, 220, 230))
+    pal.setColor(QPalette.ColorRole.Text,            QColor(220, 220, 230))
+    pal.setColor(QPalette.ColorRole.Button,          QColor(55,  55,  70))
+    pal.setColor(QPalette.ColorRole.ButtonText,      QColor(220, 220, 230))
+    pal.setColor(QPalette.ColorRole.BrightText,      QColor(255, 120, 120))
+    pal.setColor(QPalette.ColorRole.Link,            QColor(100, 180, 255))
+    pal.setColor(QPalette.ColorRole.Highlight,       QColor(50,  120, 200))
+    pal.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
     app.setPalette(pal)
 
     win = MainWindow()
     win.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
